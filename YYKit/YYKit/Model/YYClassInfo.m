@@ -140,7 +140,7 @@ YYEncodingType YYEncodingGetType(const char *typeEncoding) {
         for (unsigned int i = 0; i < argumentCount; i++) {
             char *argumentType = method_copyArgumentType(method, i);
             // https://www.jianshu.com/p/e4237de0aedb method type
-            // method_copyArgumentType 去掉returnType; 返回
+            // method_copyArgumentType 已经去掉returnType; 返回
             // v(返回值) @（self）:(表示方法)@ (实际参数)
             NSString *type = argumentType ? [NSString stringWithUTF8String:argumentType] : nil;
             [argumentTypes addObject:type ? type : @""];
@@ -168,8 +168,22 @@ YYEncodingType YYEncodingGetType(const char *typeEncoding) {
     YYEncodingType type = 0;
     unsigned int attrCount;
     objc_property_attribute_t *attrs = property_copyAttributeList(property, &attrCount);
+    
+    /*
+        attrs包含的是class property的属性描述
+        官网描述
+            You can use the property_getAttributes function to discover the name, the @encode type string of a property, and other attributes of the property.
+     
+        比如
+        @property (nonatomic, copy) NSString *name;        的attrs如下
+        T:NSString    C:copy  N:noatomic  V:_ivarName
+            
+    */
+    
     for (unsigned int i = 0; i < attrCount; i++) {
         switch (attrs[i].name[0]) {
+                
+                
             case 'T': { // Type encoding
                 if (attrs[i].value) {
                     _typeEncoding = [NSString stringWithUTF8String:attrs[i].value];
@@ -178,6 +192,7 @@ YYEncodingType YYEncodingGetType(const char *typeEncoding) {
                     if ((type & YYEncodingTypeMask) == YYEncodingTypeObject && _typeEncoding.length) {
                         
                         // 获取property 申明协议。格式为 @<xxx>; xxx是协议
+                        // @"@\NSArray\"" 截获出类型
                         NSScanner *scanner = [NSScanner scannerWithString:_typeEncoding];
                         if (![scanner scanString:@"@\"" intoString:NULL]) continue;
                         
@@ -246,6 +261,9 @@ YYEncodingType YYEncodingGetType(const char *typeEncoding) {
     
     _type = type;
     if (_name.length) {
+        /*
+         * 如果未使用自定义set get 方法，使用默认
+         */
         if (!_getter) {
             _getter = NSSelectorFromString(_name);
         }

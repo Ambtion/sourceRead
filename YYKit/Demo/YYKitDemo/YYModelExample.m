@@ -51,6 +51,8 @@ static void SimpleObjectExample() {
 @property (nonatomic, copy) NSString *name;
 @property (nonatomic, strong) NSDate *createTime;
 @property (nonatomic, strong) YYUser *owner;
+
+
 @end
 
 @implementation YYRepo
@@ -90,6 +92,8 @@ static void NestObjectExample() {
 @property (nonatomic, strong) NSArray *photos; // Array<YYPhoto>
 @property (nonatomic, strong) NSDictionary *likedUsers; // Key:name(NSString) Value:user(YYUser)
 @property (nonatomic, strong) NSSet *likedUserIds; // Set<NSNumber>
+@property (nonatomic, strong) NSString *testName;
+
 @end
 
 @implementation YYAlbum
@@ -193,11 +197,11 @@ static void CodingCopyingHashEqualExample() {
 @implementation YYModelExample
 
 - (void)runExample {
-    SimpleObjectExample();
-    NestObjectExample();
+//    SimpleObjectExample();
+//    NestObjectExample();
     ContainerObjectExample();
-    CustomMapperExample();
-    CodingCopyingHashEqualExample();
+//    CustomMapperExample();
+//    CodingCopyingHashEqualExample();
 }
 
 - (void)viewDidLoad {

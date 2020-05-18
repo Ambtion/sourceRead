@@ -28,6 +28,9 @@
 }
 
 - (instancetype)initWithPath:(NSString *)path {
+    /*
+     * 需要检验的先创建
+     */
     if (path.length == 0) return nil;
     YYDiskCache *diskCache = [[YYDiskCache alloc] initWithPath:path];
     if (!diskCache) return nil;
@@ -65,7 +68,10 @@
         [_diskCache containsObjectForKey:key withBlock:block];
     }
 }
-
+/*
+ * key
+ * NSCoding 协议value支持所有
+ */
 - (id<NSCoding>)objectForKey:(NSString *)key {
     id<NSCoding> object = [_memoryCache objectForKey:key];
     if (!object) {

@@ -37,6 +37,7 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     @package
     __unsafe_unretained _YYLinkedMapNode *_prev; // retained by dic
     __unsafe_unretained _YYLinkedMapNode *_next; // retained by dic
+        
     id _key;
     id _value;
     NSUInteger _cost;
@@ -59,6 +60,7 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     CFMutableDictionaryRef _dic; // do not set object directly
     NSUInteger _totalCost;
     NSUInteger _totalCount;
+    
     _YYLinkedMapNode *_head; // MRU, do not change it directly
     _YYLinkedMapNode *_tail; // LRU, do not change it directly
     BOOL _releaseOnMainThread;
@@ -138,6 +140,10 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     if (_tail == node) _tail = node->_prev;
 }
 
+/*
+ * 链表结构删除node
+ * _dic 删除存储的key value
+ */
 - (_YYLinkedMapNode *)removeTailNode {
     if (!_tail) return nil;
     _YYLinkedMapNode *tail = _tail;
@@ -182,12 +188,19 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
 
 
 @implementation YYMemoryCache {
+    @package
     pthread_mutex_t _lock;
-    _YYLinkedMap *_lru;
-    dispatch_queue_t _queue;
+    _YYLinkedMap *_lru;     // 非线程实现类
+    dispatch_queue_t _queue; // 读写锁可以替代 _lock +  _queue ？？？
 }
 
+/*
+ * 定时监控缓存，清除不适合的缓存
+ * 比timer代码简单，但是无法撤销轮询
+ */
+
 - (void)_trimRecursively {
+    
     __weak typeof(self) _self = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(_autoTrimInterval * NSEC_PER_SEC)), dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
         __strong typeof(_self) self = _self;
@@ -198,12 +211,18 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
 }
 
 - (void)_trimInBackground {
+    
+    // 串行队列执行，保证线程读写安全
     dispatch_async(_queue, ^{
         [self _trimToCost:self->_costLimit];
         [self _trimToCount:self->_countLimit];
         [self _trimToAge:self->_ageLimit];
     });
 }
+ /*
+  * pthread_mutex_lock 线程安全
+    可以考虑替换 dispatch_semaphore_t 降低等待性能损耗？
+  */
 
 - (void)_trimToCost:(NSUInteger)costLimit {
     BOOL finish = NO;
@@ -216,8 +235,9 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     }
     pthread_mutex_unlock(&_lock);
     if (finish) return;
-    
+
     NSMutableArray *holder = [NSMutableArray new];
+    // 删除node,直到cost小于限制
     while (!finish) {
         if (pthread_mutex_trylock(&_lock) == 0) {
             if (_lru->_totalCost > costLimit) {
@@ -234,11 +254,14 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     if (holder.count) {
         dispatch_queue_t queue = _lru->_releaseOnMainThread ? dispatch_get_main_queue() : YYMemoryCacheGetReleaseQueue();
         dispatch_async(queue, ^{
+            // block持有，释放时间放在block线程中；优秀！！！
             [holder count]; // release in queue
         });
     }
 }
-
+/*
+ * 根据count释放，实现等同于_trimToCost
+ */
 - (void)_trimToCount:(NSUInteger)countLimit {
     BOOL finish = NO;
     pthread_mutex_lock(&_lock);
@@ -273,6 +296,9 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     }
 }
 
+/*
+ * 根据有效期删除
+ */
 - (void)_trimToAge:(NSTimeInterval)ageLimit {
     BOOL finish = NO;
     NSTimeInterval now = CACurrentMediaTime();
@@ -308,6 +334,7 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     }
 }
 
+// 内部使用命名加"_"
 - (void)_appDidReceiveMemoryWarningNotification {
     if (self.didReceiveMemoryWarningBlock) {
         self.didReceiveMemoryWarningBlock(self);
@@ -344,6 +371,7 @@ static inline dispatch_queue_t YYMemoryCacheGetReleaseQueue() {
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_appDidReceiveMemoryWarningNotification) name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_appDidEnterBackgroundNotification) name:UIApplicationDidEnterBackgroundNotification object:nil];
     
+    // 启动监控清除任务
     [self _trimRecursively];
     return self;
 }

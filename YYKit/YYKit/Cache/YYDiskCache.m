@@ -65,8 +65,8 @@ static void _YYDiskCacheSetGlobal(YYDiskCache *cache) {
 
 @implementation YYDiskCache {
     YYKVStorage *_kv;
-    dispatch_semaphore_t _lock;
-    dispatch_queue_t _queue;
+    dispatch_semaphore_t _lock; // 线程安全锁
+    dispatch_queue_t _queue; // 异步获取队列
 }
 
 - (void)_trimRecursively {
@@ -162,6 +162,12 @@ static void _YYDiskCacheSetGlobal(YYDiskCache *cache) {
     self = [super init];
     if (!self) return nil;
     
+    /*
+     * 获取缓存 NSMapTable 缓存；
+     * value 使用weaks属性；
+     * 减少初始数据库，文件操作，节省性能
+     */
+    
     YYDiskCache *globalCache = _YYDiskCacheGetGlobal(path);
     if (globalCache) return globalCache;
     
@@ -174,11 +180,17 @@ static void _YYDiskCacheSetGlobal(YYDiskCache *cache) {
         type = YYKVStorageTypeMixed;
     }
     
+    
     YYKVStorage *kv = [[YYKVStorage alloc] initWithPath:path type:type];
     if (!kv) return nil;
     
     _kv = kv;
     _path = path;
+    
+    /*
+     * 使用dispatch_semaphore_create锁，宏定义 Lock(); Unlcok();类似SDWebImage实现
+       并发队列，支持并发
+     */
     _lock = dispatch_semaphore_create(1);
     _queue = dispatch_queue_create("com.ibireme.cache.disk", DISPATCH_QUEUE_CONCURRENT);
     _inlineThreshold = threshold;
@@ -246,7 +258,9 @@ static void _YYDiskCacheSetGlobal(YYDiskCache *cache) {
         block(key, object);
     });
 }
-
+/*
+ * NSCoding 协议使用，支持object存储
+ */
 - (void)setObject:(id<NSCoding>)object forKey:(NSString *)key {
     if (!key) return;
     if (!object) {
@@ -278,7 +292,9 @@ static void _YYDiskCacheSetGlobal(YYDiskCache *cache) {
     [_kv saveItemWithKey:key value:value filename:filename extendedData:extendedData];
     Unlock();
 }
-
+/*
+ * _queue 主要支持异步调用
+ */
 - (void)setObject:(id<NSCoding>)object forKey:(NSString *)key withBlock:(void(^)(void))block {
     __weak typeof(self) _self = self;
     dispatch_async(_queue, ^{
@@ -296,6 +312,11 @@ static void _YYDiskCacheSetGlobal(YYDiskCache *cache) {
 }
 
 - (void)removeObjectForKey:(NSString *)key withBlock:(void(^)(NSString *key))block {
+    /*
+     *1： __strong 引用，避免block执行过程中，self释放；行为异常
+      2：block执行完，quene会释放block，打破循环引用
+     *
+     */
     __weak typeof(self) _self = self;
     dispatch_async(_queue, ^{
         __strong typeof(_self) self = _self;
@@ -321,6 +342,10 @@ static void _YYDiskCacheSetGlobal(YYDiskCache *cache) {
 
 - (void)removeAllObjectsWithProgressBlock:(void(^)(int removedCount, int totalCount))progress
                                  endBlock:(void(^)(BOOL error))end {
+    /*
+     * __weak typeof(_kv) wKv = _kv;
+        block 中循环引用警告
+     */
     __weak typeof(self) _self = self;
     dispatch_async(_queue, ^{
         __strong typeof(_self) self = _self;

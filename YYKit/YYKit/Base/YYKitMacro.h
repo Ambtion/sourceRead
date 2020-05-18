@@ -329,6 +329,9 @@ assert(res == 0); \
         YYMUTEX_ASSERT_ON_ERROR(pthread_mutexattr_destroy (&attr));
     }
 #undef YYMUTEX_ASSERT_ON_ERROR
+    /*
+     * #undef 控制define 作用域
+     */
 }
 
 

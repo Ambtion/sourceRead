@@ -25,8 +25,8 @@ static const NSUInteger kMaxErrorRetryCount = 8;
 static const NSTimeInterval kMinRetryTimeInterval = 2.0;
 static const int kPathLengthMax = PATH_MAX - 64;
 static NSString *const kDBFileName = @"manifest.sqlite";
-static NSString *const kDBShmFileName = @"manifest.sqlite-shm";
-static NSString *const kDBWalFileName = @"manifest.sqlite-wal";
+static NSString *const kDBShmFileName = @"manifest.sqlite-shm"; // shm 是wal 的索引文件
+static NSString *const kDBWalFileName = @"manifest.sqlite-wal"; // wal缓存文件，checkpoint可以被删除
 static NSString *const kDataDirectoryName = @"data";
 static NSString *const kTrashDirectoryName = @"trash";
 
@@ -75,6 +75,9 @@ static NSString *const kTrashDirectoryName = @"trash";
 
 
 #pragma mark - db
+/*
+ * 一次打开操作；_dbCheck补偿错误
+ */
 
 - (BOOL)_dbOpen {
     if (_db) return YES;
@@ -101,6 +104,10 @@ static NSString *const kTrashDirectoryName = @"trash";
     }
 }
 
+/*
+ * 关闭操作，异常处理 | 重试机制
+ */
+
 - (BOOL)_dbClose {
     if (!_db) return YES;
     
@@ -117,10 +124,11 @@ static NSString *const kTrashDirectoryName = @"trash";
         if (result == SQLITE_BUSY || result == SQLITE_LOCKED) {
             if (!stmtFinalized) {
                 stmtFinalized = YES;
+                // Find the next prepared statement
                 sqlite3_stmt *stmt;
                 while ((stmt = sqlite3_next_stmt(_db, nil)) != 0) {
-                    sqlite3_finalize(stmt);
-                    retry = YES;
+                    sqlite3_finalize(stmt); // Destroy A Prepared Statement Object
+                    retry = YES; // 再次尝试
                 }
             }
         } else if (result != SQLITE_OK) {
@@ -133,6 +141,10 @@ static NSString *const kTrashDirectoryName = @"trash";
     return YES;
 }
 
+/*
+ * 开可以用时开，关必须立即关
+ */
+
 - (BOOL)_dbCheck {
     if (!_db) {
         if (_dbOpenErrorCount < kMaxErrorRetryCount &&
@@ -144,6 +156,12 @@ static NSString *const kTrashDirectoryName = @"trash";
     }
     return YES;
 }
+
+/*
+ *  journal_mode = wal sqlist_3.7以后支持wal机制 Write Ahead Log（日志预写）
+ *  synchronous = normal 『』
+        SQLite数据库引擎在大部分紧急时刻会暂停，但不像FULL模式下那么频繁。 NORMAL模式下有很小的几率(但不是不存在)发生电源故障导致数据库损坏的情况。但实际上，在这种情况 下很可能你的硬盘已经不能使用，或者发生了其他的不可恢复的硬件错误。
+ */
 
 - (BOOL)_dbInitialize {
     NSString *sql = @"pragma journal_mode = wal; pragma synchronous = normal; create table if not exists manifest (key text, filename text, size integer, inline_data blob, modification_time integer, last_access_time integer, extended_data blob, primary key(key)); create index if not exists last_access_time_idx on manifest(last_access_time);";
@@ -172,6 +190,10 @@ static NSString *const kTrashDirectoryName = @"trash";
 
 - (sqlite3_stmt *)_dbPrepareStmt:(NSString *)sql {
     if (![self _dbCheck] || sql.length == 0 || !_dbStmtCache) return NULL;
+    
+    /*
+     * 缓存sqlite3_stmt ，提高数据库访问效率
+     */
     sqlite3_stmt *stmt = (sqlite3_stmt *)CFDictionaryGetValue(_dbStmtCache, (__bridge const void *)(sql));
     if (!stmt) {
         int result = sqlite3_prepare_v2(_db, sql.UTF8String, -1, &stmt, NULL);
@@ -203,7 +225,9 @@ static NSString *const kTrashDirectoryName = @"trash";
         sqlite3_bind_text(stmt, index + i, key.UTF8String, -1, NULL);
     }
 }
-
+/*
+ * 使用sqlite3_bind 函数，减少SQL语句动态解析次数，提高效率
+ */
 - (BOOL)_dbSaveWithKey:(NSString *)key value:(NSData *)value fileName:(NSString *)fileName extendedData:(NSData *)extendedData {
     NSString *sql = @"insert or replace into manifest (key, filename, size, inline_data, modification_time, last_access_time, extended_data) values (?1, ?2, ?3, ?4, ?5, ?6, ?7);";
     sqlite3_stmt *stmt = [self _dbPrepareStmt:sql];
@@ -213,6 +237,7 @@ static NSString *const kTrashDirectoryName = @"trash";
     sqlite3_bind_text(stmt, 1, key.UTF8String, -1, NULL);
     sqlite3_bind_text(stmt, 2, fileName.UTF8String, -1, NULL);
     sqlite3_bind_int(stmt, 3, (int)value.length);
+    // 文件名称为0写入数据库
     if (fileName.length == 0) {
         sqlite3_bind_blob(stmt, 4, value.bytes, (int)value.length, 0);
     } else {
@@ -227,9 +252,13 @@ static NSString *const kTrashDirectoryName = @"trash";
         if (_errorLogsEnabled) NSLog(@"%s line:%d sqlite insert error (%d): %s", __FUNCTION__, __LINE__, result, sqlite3_errmsg(_db));
         return NO;
     }
+    
     return YES;
 }
 
+/*
+ * 更新时间
+ */
 - (BOOL)_dbUpdateAccessTimeWithKey:(NSString *)key {
     NSString *sql = @"update manifest set last_access_time = ?1 where key = ?2;";
     sqlite3_stmt *stmt = [self _dbPrepareStmt:sql];
@@ -244,12 +273,20 @@ static NSString *const kTrashDirectoryName = @"trash";
     return YES;
 }
 
+/*
+ * 批量更新时间
+ */
+
 - (BOOL)_dbUpdateAccessTimeWithKeys:(NSArray *)keys {
     if (![self _dbCheck]) return NO;
     int t = (int)time(NULL);
      NSString *sql = [NSString stringWithFormat:@"update manifest set last_access_time = %d where key in (%@);", t, [self _dbJoinedKeys:keys]];
     
     sqlite3_stmt *stmt = NULL;
+    /*
+     * update manifest set last_access_time = %d where key in（ ?, ?）
+     * 不缓存stmt；无意义
+     */
     int result = sqlite3_prepare_v2(_db, sql.UTF8String, -1, &stmt, NULL);
     if (result != SQLITE_OK) {
         if (_errorLogsEnabled)  NSLog(@"%s line:%d sqlite stmt prepare error (%d): %s", __FUNCTION__, __LINE__, result, sqlite3_errmsg(_db));
@@ -258,6 +295,9 @@ static NSString *const kTrashDirectoryName = @"trash";
     
     [self _dbBindJoinedKeys:keys stmt:stmt fromIndex:1];
     result = sqlite3_step(stmt);
+    /*
+     * 不缓存stmt；使用sqlite3_finalize销毁
+     */
     sqlite3_finalize(stmt);
     if (result != SQLITE_DONE) {
         if (_errorLogsEnabled) NSLog(@"%s line:%d sqlite update error (%d): %s", __FUNCTION__, __LINE__, result, sqlite3_errmsg(_db));
@@ -289,9 +329,14 @@ static NSString *const kTrashDirectoryName = @"trash";
         if (_errorLogsEnabled) NSLog(@"%s line:%d sqlite stmt prepare error (%d): %s", __FUNCTION__, __LINE__, result, sqlite3_errmsg(_db));
         return NO;
     }
+    /*
+     * Binding Values To Prepared Statements
+     */
     
     [self _dbBindJoinedKeys:keys stmt:stmt fromIndex:1];
     result = sqlite3_step(stmt);
+    
+    // 不缓存stmt；使用sqlite3_finalize销毁
     sqlite3_finalize(stmt);
     if (result == SQLITE_ERROR) {
         if (_errorLogsEnabled) NSLog(@"%s line:%d sqlite delete error (%d): %s", __FUNCTION__, __LINE__, result, sqlite3_errmsg(_db));
@@ -331,10 +376,13 @@ static NSString *const kTrashDirectoryName = @"trash";
     char *key = (char *)sqlite3_column_text(stmt, i++);
     char *filename = (char *)sqlite3_column_text(stmt, i++);
     int size = sqlite3_column_int(stmt, i++);
+    
     const void *inline_data = excludeInlineData ? NULL : sqlite3_column_blob(stmt, i);
     int inline_data_bytes = excludeInlineData ? 0 : sqlite3_column_bytes(stmt, i++);
+    
     int modification_time = sqlite3_column_int(stmt, i++);
     int last_access_time = sqlite3_column_int(stmt, i++);
+    
     const void *extended_data = sqlite3_column_blob(stmt, i);
     int extended_data_bytes = sqlite3_column_bytes(stmt, i++);
     
@@ -357,7 +405,16 @@ static NSString *const kTrashDirectoryName = @"trash";
     
     YYKVStorageItem *item = nil;
     int result = sqlite3_step(stmt);
+    
     if (result == SQLITE_ROW) {
+        
+        /*
+         *** ^If the SQL statement being executed returns any data, then [SQLITE_ROW]
+         ** is returned each time a new row of data is ready for processing by the
+         ** caller. The values may be accessed using the [column access functions].
+         ** sqlite3_step() is called again to retrieve the next row of data.
+         */
+        
         item = [self _dbGetItemFromStmt:stmt excludeInlineData:excludeInlineData];
     } else {
         if (result != SQLITE_DONE) {
@@ -612,6 +669,11 @@ static NSString *const kTrashDirectoryName = @"trash";
     NSString *path = [_dataPath stringByAppendingPathComponent:filename];
     return [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
+/*
+ * 根据uuid创建垃圾回收文件夹
+ * 回收站目前未使用
+ *
+ */
 
 - (BOOL)_fileMoveAllToTrash {
     CFUUIDRef uuidRef = CFUUIDCreate(NULL);
@@ -628,7 +690,7 @@ static NSString *const kTrashDirectoryName = @"trash";
 
 - (void)_fileEmptyTrashInBackground {
     NSString *trashPath = _trashPath;
-    dispatch_queue_t queue = _trashQueue;
+    dispatch_queue_t queue = _trashQueue; // 专门的清空回收站串行队列
     dispatch_async(queue, ^{
         NSFileManager *manager = [NSFileManager new];
         NSArray *directoryContents = [manager contentsOfDirectoryAtPath:trashPath error:NULL];
@@ -647,9 +709,19 @@ static NSString *const kTrashDirectoryName = @"trash";
  Make sure the db is closed.
  */
 - (void)_reset {
+    /*
+     * 删除数据库信息
+     */
     [[NSFileManager defaultManager] removeItemAtPath:[_path stringByAppendingPathComponent:kDBFileName] error:nil];
     [[NSFileManager defaultManager] removeItemAtPath:[_path stringByAppendingPathComponent:kDBShmFileName] error:nil];
     [[NSFileManager defaultManager] removeItemAtPath:[_path stringByAppendingPathComponent:kDBWalFileName] error:nil];
+    /*
+     * 删除文件
+        1：移动带trash目录；排除对原始目录干扰
+        2：指定队列后台删除；后台执行，降低阻塞
+        大文件删除思路，值得学习参考
+     */
+    
     [self _fileMoveAllToTrash];
     [self _fileEmptyTrashInBackground];
 }
@@ -711,6 +783,9 @@ static NSString *const kTrashDirectoryName = @"trash";
 }
 
 - (void)dealloc {
+    /*
+     * 文件关闭-后台关闭
+     */
     UIBackgroundTaskIdentifier taskID = [[UIApplication sharedExtensionApplication] beginBackgroundTaskWithExpirationHandler:^{}];
     [self _dbClose];
     if (taskID != UIBackgroundTaskInvalid) {
@@ -901,6 +976,7 @@ static NSString *const kTrashDirectoryName = @"trash";
 }
 
 - (BOOL)removeAllItems {
+    // 重置所有文件；重新打开
     if (![self _dbClose]) return NO;
     [self _reset];
     if (![self _dbOpen]) return NO;
@@ -926,11 +1002,16 @@ static NSString *const kTrashDirectoryName = @"trash";
                     if (item.filename) {
                         [self _fileDeleteWithName:item.filename];
                     }
+                    
                     suc = [self _dbDeleteItemWithKey:item.key];
                     left--;
                 } else {
                     break;
                 }
+                
+                /*
+                * 失败异常终止行为
+                */
                 if (!suc) break;
             }
             if (progress) progress(total - left, total);

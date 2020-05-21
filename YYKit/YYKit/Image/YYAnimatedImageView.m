@@ -73,9 +73,12 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
 
 @implementation _YYAnimatedImageViewFetchOperation
 - (void)main {
+    /*
+     *
+     */
     __strong YYAnimatedImageView *view = _view;
     if (!view) return;
-    if ([self isCancelled]) return;
+    if ([self isCancelled]) return; // 执行NSOperation任务的过程中该任务可能会被取消。
     view->_incrBufferCount++;
     if (view->_incrBufferCount == 0) [view calcMaxBufferCount];
     if (view->_incrBufferCount > (NSInteger)view->_maxBufferCount) {
@@ -94,9 +97,15 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
             if (!view) break;
             LOCK_VIEW(BOOL miss = (view->_buffer[@(idx)] == nil));
             if (miss) {
+                // 解压图片
                 UIImage *img = [_curImage animatedImageFrameAtIndex:idx];
+                
+                // 对解码成功的第二重保证
                 img = img.imageByDecoded;
                 if ([self isCancelled]) break;
+                /*
+                 * 线程安全设置缓存
+                 */
                 LOCK_VIEW(view->_buffer[@(idx)] = img ? img : [NSNull null]);
                 view = nil;
             }
@@ -164,6 +173,9 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
              NSMutableDictionary *holder = _buffer;
              _buffer = [NSMutableDictionary new];
              dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+                 /*
+                  * 再次出现 利用gcd捕获异常，后台释放
+                  */
                  // Capture the dictionary to global queue,
                  // release these images in background to avoid blocking UI thread.
                  [holder class];
@@ -291,6 +303,13 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
 
 // dynamically adjust buffer size for current memory.
 - (void)calcMaxBufferCount {
+    /*
+     * 动态计算缓存限制大小
+     * 1 ： 内存大小 * 0.2 ，剩余内存 * 0.6 取最小值
+     * 2 ： 过最小的缓存值BUFFER_SIZE和用户自定义的_maxBufferSize属性综合判断。
+     
+     */
+    
     int64_t bytes = (int64_t)_curAnimatedImage.animatedImageBytesPerFrame;
     if (bytes == 0) bytes = 1024;
     
@@ -306,6 +325,9 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
 
 - (void)dealloc {
     [_requestQueue cancelAllOperations];
+    /*
+     * 退入后台 | 内存警告监控
+     */
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidReceiveMemoryWarningNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
     [_link invalidate];
@@ -340,6 +362,11 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
     }
 }
 
+/*
+ * _requestQueue 串行队列
+ * _incrBufferCount 降低_incrBufferCount，延后解压图片任务
+ * 然后计算下一帧的下标，最后移除不是下一帧的所有缓存，保证进入前台时下一帧的及时显示。
+ */
 - (void)didReceiveMemoryWarning:(NSNotification *)notification {
     [_requestQueue cancelAllOperations];
     [_requestQueue addOperationWithBlock: ^{
@@ -356,10 +383,14 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
     }];
 }
 
+/*
+ * 清除所有的异步解压任务，然后计算下一帧的下标，最后移除不是下一帧的所有缓存，保证进入前台时下一帧的及时显示。
+ */
 - (void)didEnterBackground:(NSNotification *)notification {
     [_requestQueue cancelAllOperations];
     NSNumber *next = @((_curIndex + 1) % _totalFrameCount);
     LOCK(
+        
          NSArray * keys = _buffer.allKeys;
          for (NSNumber * key in keys) {
              if (![key isEqualToNumber:next]) { // keep the next frame for smoothly animation
@@ -384,10 +415,13 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
     
     NSTimeInterval delay = 0;
     if (!_bufferMiss) {
+        
+        // 计算播放时间
         _time += link.duration;
         delay = [image animatedImageDurationAtIndex:_curIndex];
         if (_time < delay) return;
         _time -= delay;
+        
         if (nextIndex == 0) {
             _curLoop++;
             if (_curLoop >= _totalLoop && _totalLoop != 0) {
@@ -400,15 +434,23 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
         delay = [image animatedImageDurationAtIndex:nextIndex];
         if (_time > delay) _time = delay; // do not jump over frame
     }
+    
     LOCK(
          bufferedImage = buffer[@(nextIndex)];
          if (bufferedImage) {
+            /*
+             * 播放完删除
+             */
              if ((int)_incrBufferCount < _totalFrameCount) {
                  [buffer removeObjectForKey:@(nextIndex)];
              }
+            /*
+             * kvo
+             */
              [self willChangeValueForKey:@"currentAnimatedImageIndex"];
              _curIndex = nextIndex;
              [self didChangeValueForKey:@"currentAnimatedImageIndex"];
+        
              _curFrame = bufferedImage == (id)[NSNull null] ? nil : bufferedImage;
              if (_curImageHasContentsRect) {
                  _curContentsRect = [image animatedImageContentsRectAtIndex:_curIndex];
@@ -460,6 +502,9 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
     }
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
+    /*
+     * 通过 contentsRect 局部显示图片
+     */
     self.layer.contentsRect = layerRect;
     [CATransaction commit];
 }
@@ -529,6 +574,9 @@ typedef NS_ENUM(NSUInteger, YYAnimatedImageType) {
 
 + (BOOL)automaticallyNotifiesObserversForKey:(NSString *)key {
     if ([key isEqualToString:@"currentAnimatedImageIndex"]) {
+        /*
+         * 关闭currentAnimatedImageIndex KVO实现，自己实现保证线程安全
+         */
         return NO;
     }
     return [super automaticallyNotifiesObserversForKey:key];

@@ -8,7 +8,10 @@
 //  This source code is licensed under the MIT-style license found in the
 //  LICENSE file in the root directory of this source tree.
 //
-
+/*
+ * https://blog.ibireme.com/2015/11/02/mobile_image_benchmark/ 移动端图片格式调研
+    https://blog.ibireme.com/2015/11/02/ios_image_tips/     iOS 处理图片的一些小 Tip
+ */
 #import "YYImage.h"
 #import "NSString+YYAdd.h"
 #import "NSBundle+YYAdd.h"
@@ -20,18 +23,31 @@
     NSUInteger _bytesPerFrame;
 }
 
+/*
+ * 重载imageNamed；避免产生全局缓存
+ */
 + (YYImage *)imageNamed:(NSString *)name {
     if (name.length == 0) return nil;
     if ([name hasSuffix:@"/"]) return nil;
-    
+    /*
+     * 去掉资源名称后缀
+     */
     NSString *res = name.stringByDeletingPathExtension;
+    /*
+     * 资源后缀名，一般为资源格式
+     */
     NSString *ext = name.pathExtension;
     NSString *path = nil;
     CGFloat scale = 1;
     
     // If no extension, guess by system supported (same as UIImage).
     NSArray *exts = ext.length > 0 ? @[ext] : @[@"", @"png", @"jpeg", @"jpg", @"gif", @"webp", @"apng"];
+    
+    
     NSArray *scales = [NSBundle preferredScales];
+    /*
+     * 不同屏幕 物理分辨率/逻辑分辨率 不同，查询的优先级也不同。
+     */
     for (int s = 0; s < scales.count; s++) {
         scale = ((NSNumber *)scales[s]).floatValue;
         NSString *scaledName = [res stringByAppendingNameScale:scale];
@@ -73,7 +89,7 @@
 - (instancetype)initWithData:(NSData *)data scale:(CGFloat)scale {
     if (data.length == 0) return nil;
     if (scale <= 0) scale = [UIScreen mainScreen].scale;
-    _preloadedLock = dispatch_semaphore_create(1);
+    _preloadedLock = dispatch_semaphore_create(1); // 锁
     @autoreleasepool {
         YYImageDecoder *decoder = [YYImageDecoder decoderWithData:data scale:scale];
         YYImageFrame *frame = [decoder frameAtIndex:0 decodeForDisplay:YES];
@@ -97,6 +113,11 @@
 }
 
 - (void)setPreloadAllAnimatedImageFrames:(BOOL)preloadAllAnimatedImageFrames {
+    /*
+     * 线程安全级别解压所有图片
+     * 很消耗cpu资源
+     *
+     */
     if (_preloadAllAnimatedImageFrames != preloadAllAnimatedImageFrames) {
         if (preloadAllAnimatedImageFrames && _decoder.frameCount > 0) {
             NSMutableArray *frames = [NSMutableArray new];

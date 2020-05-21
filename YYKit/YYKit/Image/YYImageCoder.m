@@ -640,6 +640,9 @@ static inline CGFloat YYImageDegreesToRadians(CGFloat degrees) {
     return degrees * M_PI / 180;
 }
 
+/*
+ * 通用设置缓存提高效率
+ */
 CGColorSpaceRef YYCGColorSpaceGetDeviceRGB() {
     static CGColorSpaceRef space;
     static dispatch_once_t onceToken;
@@ -871,6 +874,9 @@ CGImageRef YYCGImageCreateDecodedCopy(CGImageRef imageRef, BOOL decodeForDisplay
     if (width == 0 || height == 0) return NULL;
     
     if (decodeForDisplay) { //decode with redraw (may lose some precision)
+        /*
+         * 解压图片 渲染CALayer展示的颜色空间图片
+         */
         CGImageAlphaInfo alphaInfo = CGImageGetAlphaInfo(imageRef) & kCGBitmapAlphaInfoMask;
         BOOL hasAlpha = NO;
         if (alphaInfo == kCGImageAlphaPremultipliedLast ||
@@ -891,8 +897,9 @@ CGImageRef YYCGImageCreateDecodedCopy(CGImageRef imageRef, BOOL decodeForDisplay
         return newImage;
         
     } else {
-        CGColorSpaceRef space = CGImageGetColorSpace(imageRef);
-        size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
+        
+        CGColorSpaceRef space = CGImageGetColorSpace(imageRef); // 获取颜色空间
+        size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef); // number of bits in  a single color component
         size_t bitsPerPixel = CGImageGetBitsPerPixel(imageRef);
         size_t bytesPerRow = CGImageGetBytesPerRow(imageRef);
         CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(imageRef);
@@ -1061,6 +1068,16 @@ CGImageRef YYCGImageCreateCopyWithOrientation(CGImageRef imageRef, UIImageOrient
     return YYCGImageCreateAffineTransformCopy(imageRef, transform, destSize, destBitmapInfo);
 }
 
+/*
+ * 读取文件头魔数（在编程领域，一些说不清来历比较任意的数字会被称呼为魔数）判断文件类型
+ * 使用Core-Foundation提高效率
+ * 文件类型标识3中方式 1 ：扩展名 2：特征签名 （特殊的数字存放在文件的特定位置里） 3：元数据（元数据与文件本身分开存放）
+    具体参考
+    https://zh.wikipedia.org/wiki/%E6%AA%94%E6%A1%88%E6%A0%BC%E5%BC%8F
+    https://ioscaff.com/articles/262
+
+ *
+ */
 YYImageType YYImageDetectType(CFDataRef data) {
     if (!data) return YYImageTypeUnknown;
     uint64_t length = CFDataGetLength(data);
@@ -1091,10 +1108,17 @@ YYImageType YYImageDetectType(CFDataRef data) {
         } break;
             
         case YY_FOUR_CC('G', 'I', 'F', '8'): { // GIF
+            /*
+             * GIF图形文件是将文件开始处的六个字节作为特征签名的，它可以是GIF87a或者GIF89a
+             */
             return YYImageTypeGIF;
         } break;
             
         case YY_FOUR_CC(0x89, 'P', 'N', 'G'): {  // PNG
+            /*
+             * 维基百科 0x89 50 4e 47
+             * 也就是 0x89 'P', 'N', 'G'
+             */
             uint32_t tmp = *((uint32_t *)(bytes + 4));
             if (tmp == YY_FOUR_CC('\r', '\n', 0x1A, '\n')) {
                 return YYImageTypePNG;
@@ -1248,7 +1272,9 @@ CFDataRef YYCGImageCreateEncodedWebPData(CGImageRef imageRef, BOOL lossless, CGF
     WebPMemoryWriter writer = {0};
     CFDataRef webpData = NULL;
     BOOL pictureNeedFree = NO;
-    
+    /*
+     * 去中间值
+     */
     quality = quality < 0 ? 0 : quality > 1 ? 1 : quality;
     preset = preset > YYImagePresetText ? YYImagePresetDefault : preset;
     compressLevel = compressLevel < 0 ? 0 : compressLevel > 6 ? 6 : compressLevel;
@@ -1505,7 +1531,9 @@ CGImageRef YYCGImageCreateWithWebPData(CFDataRef webpData,
 
 
 @implementation YYImageDecoder {
-    pthread_mutex_t _lock; // recursive lock
+    pthread_mutex_t _lock; /*
+                            * 递归锁降低死锁概率
+                            */// recursive lock
     
     BOOL _sourceTypeDetected;
     CGImageSourceRef _source;
@@ -1604,6 +1632,12 @@ CGImageRef YYCGImageCreateWithWebPData(CFDataRef webpData,
     _data = data;
     
     YYImageType type = YYImageDetectType((__bridge CFDataRef)data);
+    
+    /*
+     *  _sourceTypeDetected
+     *  解码器图片格式一一对应
+     */
+    
     if (_sourceTypeDetected) {
         if (_type != type) {
             return NO;
@@ -1949,6 +1983,11 @@ CGImageRef YYCGImageCreateWithWebPData(CFDataRef webpData,
         if (_finalized) {
             _source = CGImageSourceCreateWithData((__bridge CFDataRef)_data, NULL);
         } else {
+            
+            /*
+             * 首先用 CGImageSourceCreateIncremental(NULL) 创建一个空的图片源，随后在获得新数据时调用
+             */
+            
             _source = CGImageSourceCreateIncremental(NULL);
             if (_source) CGImageSourceUpdateData(_source, (__bridge CFDataRef)_data, false);
         }

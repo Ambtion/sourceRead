@@ -304,8 +304,12 @@ void _object_set_associative_reference(id object, void *key, id value, uintptr_t
             }
         } else {
             // setting the association to nil breaks the association.
+            /*
+             * 设置为nil，释放old old_association
+             */
             AssociationsHashMap::iterator i = associations.find(disguised_object);
             if (i !=  associations.end()) {
+                // 二级结构
                 ObjectAssociationMap *refs = i->second;
                 ObjectAssociationMap::iterator j = refs->find(key);
                 if (j != refs->end()) {

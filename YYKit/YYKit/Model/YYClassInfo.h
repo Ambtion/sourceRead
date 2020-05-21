@@ -15,7 +15,9 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- Type encoding's type.
+    Type encoding's type.
+    这个枚举可能是多选的，所以使用了 NS_OPTIONS 而不是 NS_ENUM（编码规范）。
+    YYEncodingTypeMask 掩码 相互不影响
  */
 typedef NS_OPTIONS(NSUInteger, YYEncodingType) {
     YYEncodingTypeMask       = 0xFF, ///< mask of type value

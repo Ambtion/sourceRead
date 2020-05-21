@@ -94,6 +94,9 @@ NS_ASSUME_NONNULL_BEGIN
  
  See `YYImage` and `YYFrameImage` for example.
  */
+/*
+ * 通用协议，抽取共性，实现交互；值得学习
+ */
 @protocol YYAnimatedImage <NSObject>
 @required
 /// Total animated frame count.

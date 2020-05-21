@@ -100,7 +100,7 @@ static inline dispatch_queue_t YYImageCacheDecodeQueue() {
     memoryCache.shouldRemoveAllObjectsWhenEnteringBackground = YES;
     memoryCache.countLimit = NSUIntegerMax;
     memoryCache.costLimit = NSUIntegerMax;
-    memoryCache.ageLimit = 12 * 60 * 60;
+    memoryCache.ageLimit = 12 * 60 * 60; // 12小时
     
     YYDiskCache *diskCache = [[YYDiskCache alloc] initWithPath:path];
     diskCache.customArchiveBlock = ^(id object) { return (NSData *)object; };
@@ -119,6 +119,9 @@ static inline dispatch_queue_t YYImageCacheDecodeQueue() {
     [self setImage:image imageData:nil forKey:key withType:YYImageCacheTypeAll];
 }
 
+/*
+ * 存储 异步decode
+ */
 - (void)setImage:(UIImage *)image imageData:(NSData *)imageData forKey:(NSString *)key withType:(YYImageCacheType)type {
     if (!key || (image == nil && imageData.length == 0)) return;
     

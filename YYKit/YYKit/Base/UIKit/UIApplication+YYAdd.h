@@ -64,6 +64,7 @@ NS_ASSUME_NONNULL_BEGIN
  
  This method has no effect in App Extension.
  */
+
 - (void)incrementNetworkActivityCount;
 
 /**

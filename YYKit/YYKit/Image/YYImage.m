@@ -9,7 +9,7 @@
 //  LICENSE file in the root directory of this source tree.
 //
 /*
- * https://blog.ibireme.com/2015/11/02/mobile_image_benchmark/ 移动端图片格式调研
+ *  https://blog.ibireme.com/2015/11/02/mobile_image_benchmark/ 移动端图片格式调研
     https://blog.ibireme.com/2015/11/02/ios_image_tips/     iOS 处理图片的一些小 Tip
  */
 #import "YYImage.h"

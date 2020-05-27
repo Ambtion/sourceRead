@@ -41,7 +41,8 @@ CGSize YYScreenSize();
 
 
 /// Convert degrees to radians.
-static inline CGFloat DegreesToRadians(CGFloat degrees) {
+
+static inline __attribute__((always_inline)) CGFloat DegreesToRadians(CGFloat degrees) {
     return degrees * M_PI / 180;
 }
 

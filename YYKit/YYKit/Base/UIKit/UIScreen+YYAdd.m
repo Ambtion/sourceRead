@@ -17,11 +17,16 @@ YYSYNTH_DUMMY_CLASS(UIScreen_YYAdd);
 
 
 @implementation UIScreen (YYAdd)
-
+/*
+ * 生命周期内的属性可以使用单例缓存
+ */
 + (CGFloat)screenScale {
     static CGFloat screenScale = 0.0;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        /*
+         * 主线程访问UI
+         */
         if ([NSThread isMainThread]) {
             screenScale = [[UIScreen mainScreen] scale];
         } else {

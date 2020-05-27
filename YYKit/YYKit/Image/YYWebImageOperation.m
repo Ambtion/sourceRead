@@ -112,8 +112,15 @@ static void URLInBlackListAdd(NSURL *url) {
 @synthesize finished = _finished;
 @synthesize cancelled = _cancelled;
 
+/*
+* 类似AFNetWork 两个函数搞定全局下载子线程；缓存减少线程数量
+* runloop 创建保持线程活性
+*/
+
 /// Network thread entry point.
 + (void)_networkThreadMain:(id)object {
+    
+    // runloop 保持常驻
     @autoreleasepool {
         [[NSThread currentThread] setName:@"com.ibireme.yykit.webimage.request"];
         NSRunLoop *runLoop = [NSRunLoop currentRunLoop];
@@ -123,6 +130,7 @@ static void URLInBlackListAdd(NSURL *url) {
 }
 
 /// Global image request network thread, used by NSURLConnection delegate.
+
 + (NSThread *)_networkThread {
     static NSThread *thread = nil;
     static dispatch_once_t onceToken;
@@ -168,6 +176,10 @@ static void URLInBlackListAdd(NSURL *url) {
 #endif
 }
 
+
+
+#pragma mark -
+
 - (instancetype)init {
     @throw [NSException exceptionWithName:@"YYWebImageOperation init error" reason:@"YYWebImageOperation must be initialized with a request. Use the designated initializer to init." userInfo:nil];
     return [self initWithRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@""]] options:0 cache:nil cacheKey:nil progress:nil transform:nil completion:nil];
@@ -210,6 +222,7 @@ static void URLInBlackListAdd(NSURL *url) {
         self.finished = YES;
         if (_connection) {
             [_connection cancel];
+            // loading 框
             if (![_request.URL isFileURL] && (_options & YYWebImageOptionShowNetworkActivity)) {
                 [[UIApplication sharedExtensionApplication] decrementNetworkActivityCount];
             }
@@ -618,7 +631,7 @@ static void URLInBlackListAdd(NSURL *url) {
                         self.data = nil; // clear the data, re-encode for disk cache
                     } break;
                 }
-                if ([self isCancelled]) return;
+                if ([self isCancelled]) return; // 判断队列
                 
                 if (self.transform && image) {
                     UIImage *newImage = self.transform(image, self.request.URL);
@@ -628,6 +641,7 @@ static void URLInBlackListAdd(NSURL *url) {
                     image = newImage;
                     if ([self isCancelled]) return;
                 }
+                
                 
                 [self performSelector:@selector(_didReceiveImageFromWeb:) onThread:[self.class _networkThread] withObject:image waitUntilDone:NO];
             });
@@ -688,6 +702,7 @@ static void URLInBlackListAdd(NSURL *url) {
                 [self performSelector:@selector(_startOperation) onThread:[[self class] _networkThread] withObject:nil waitUntilDone:NO modes:@[NSDefaultRunLoopMode]];
                 if ((_options & YYWebImageOptionAllowBackgroundTask) && ![UIApplication isAppExtension]) {
                     __weak __typeof__ (self) _self = self;
+                    // 支持后台请求beginBackgroundTaskWithExpirationHandler 获取更多时间
                     if (_taskID == UIBackgroundTaskInvalid) {
                         _taskID = [[UIApplication sharedExtensionApplication] beginBackgroundTaskWithExpirationHandler:^{
                             __strong __typeof (_self) self = _self;

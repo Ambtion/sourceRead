@@ -17,6 +17,9 @@ YYSYNTH_DUMMY_CLASS(UIColor_YYAdd)
 
 
 #define CLAMP_COLOR_VALUE(v) (v) = (v) < 0 ? 0 : (v) > 1 ? 1 : (v)
+/*
+ * rgb <-> hsl 算法 https://www.cnblogs.com/daiguagua/p/3311756.html
+ */
 
 void YY_RGB2HSL(CGFloat r, CGFloat g, CGFloat b,
                 CGFloat *h, CGFloat *s, CGFloat *l) {
@@ -261,6 +264,12 @@ void YY_HSL2HSB(CGFloat h, CGFloat s, CGFloat l,
 
 static inline NSUInteger hexStrToInt(NSString *str) {
     uint32_t result = 0;
+    /*
+     * https://www.cnblogs.com/wubiyu/archive/2008/11/20/1337835.html
+     * 从一个字符串中读进与指定格式相符的数据
+     * 小函数内联
+     */
+    
     sscanf([str UTF8String], "%X", &result);
     return result;
 }
@@ -332,6 +341,9 @@ static BOOL hexStrToRGBA(NSString *str,
     if (hex && withAlpha) {
         hex = [hex stringByAppendingFormat:@"%02lx",
                (unsigned long)(self.alpha * 255.0 + 0.5)];
+        /*
+         * +0.5实现四舍五入；
+         */
     }
     return hex;
 }

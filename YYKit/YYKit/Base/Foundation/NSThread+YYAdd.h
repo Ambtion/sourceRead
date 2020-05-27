@@ -20,6 +20,9 @@
  runloop to manage your task, you may use this method to add an autorelease pool
  to the runloop. Its behavior is the same as the main thread's autorelease pool.
  */
+/*
+ * 非ARC模式 为当前线程绑定NSAutoreleasePool；利用runloop控制NSAutoreleasePool周期（和系统实现一致）；赞
+ */
 + (void)addAutoreleasePoolToCurrentRunloop;
 
 @end

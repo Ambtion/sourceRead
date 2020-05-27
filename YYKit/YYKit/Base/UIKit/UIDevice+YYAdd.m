@@ -72,6 +72,7 @@ YYSYNTH_DUMMY_CLASS(UIDevice_YYAdd)
         return YES;
     }
     
+    
     NSString *path = [NSString stringWithFormat:@"/private/%@", [NSString stringWithUUID]];
     if ([@"test" writeToFile : path atomically : YES encoding : NSUTF8StringEncoding error : NULL]) {
         [[NSFileManager defaultManager] removeItemAtPath:path error:nil];

@@ -78,6 +78,14 @@ YYSYNTH_DUMMY_CLASS(UIView_YYAdd)
             return (UIViewController *)nextResponder;
         }
     }
+//    UIView *view = self;
+//    while (view) {
+//        UIResponder *nextResponder = [view nextResponder];
+//        if ([nextResponder isKindOfClass:[UIViewController class]]) {
+//            return (UIViewController *)nextResponder;
+//        }
+//        view = view.superview;
+//    }
     return nil;
 }
 

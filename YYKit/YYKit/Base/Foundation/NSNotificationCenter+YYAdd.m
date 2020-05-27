@@ -26,6 +26,7 @@ YYSYNTH_DUMMY_CLASS(NSNotificationCenter_YYAdd)
 - (void)postNotificationOnMainThread:(NSNotification *)notification waitUntilDone:(BOOL)wait {
     if (pthread_main_np()) return [self postNotification:notification];
     [[self class] performSelectorOnMainThread:@selector(_yy_postNotification:) withObject:notification waitUntilDone:wait];
+//    [NSThread isMainThread]
 }
 
 - (void)postNotificationOnMainThreadWithName:(NSString *)name object:(id)object {

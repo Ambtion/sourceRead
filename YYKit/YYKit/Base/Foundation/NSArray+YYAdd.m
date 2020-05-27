@@ -43,6 +43,7 @@ YYSYNTH_DUMMY_CLASS(NSArray_YYAdd)
 
 - (id)randomObject {
     if (self.count) {
+        // 取值范围的随机数
         return self[arc4random_uniform((u_int32_t)self.count)];
     }
     return nil;

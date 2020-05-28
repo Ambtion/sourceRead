@@ -38,8 +38,8 @@ static dispatch_queue_t YYLabelGetReleaseQueue() {
 
 @interface YYLabel() <YYTextDebugTarget, YYAsyncLayerDelegate> {
     NSMutableAttributedString *_innerText; ///< nonnull
-    YYTextLayout *_innerLayout;
-    YYTextContainer *_innerContainer; ///< nonnull
+    YYTextLayout *_innerLayout;                 // YYLabel的布局管理类，也负责绘制
+    YYTextContainer *_innerContainer; ///< nonnull   // YYLabel的布局类
     
     NSMutableArray *_attachmentViews;
     NSMutableArray *_attachmentLayers;
@@ -51,9 +51,12 @@ static dispatch_queue_t YYLabelGetReleaseQueue() {
     YYTextLayout *_shrinkInnerLayout;
     YYTextLayout *_shrinkHighlightLayout;
     
-    NSTimer *_longPressTimer;
+    NSTimer *_longPressTimer; // 长按事件处理
     CGPoint _touchBeganPoint;
     
+    /*
+     * 结构体状态码合一
+     */
     struct {
         unsigned int layoutNeedUpdate : 1;
         unsigned int showingHighlight : 1;
@@ -103,6 +106,9 @@ static dispatch_queue_t YYLabelGetReleaseQueue() {
     YYTextLayout *layout = _innerLayout;
     _innerLayout = nil;
     _shrinkInnerLayout = nil;
+    /*
+     * 再现block capture
+     */
     dispatch_async(YYLabelGetReleaseQueue(), ^{
         NSAttributedString *text = [layout text]; // capture to block and release in background
         if (layout.attachments.count) {
@@ -571,6 +577,7 @@ static dispatch_queue_t YYLabelGetReleaseQueue() {
         if (!_state.touchMoved) {
             CGFloat moveH = point.x - _touchBeganPoint.x;
             CGFloat moveV = point.y - _touchBeganPoint.y;
+            // 转换为移动手势
             if (fabs(moveH) > fabs(moveV)) {
                 if (fabs(moveH) > kLongPressAllowableMovement) _state.touchMoved = YES;
             } else {

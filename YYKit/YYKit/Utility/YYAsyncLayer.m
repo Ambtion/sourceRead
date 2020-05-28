@@ -120,14 +120,22 @@ static dispatch_queue_t YYAsyncLayerGetReleaseQueue() {
         if (task.willDisplay) task.willDisplay(self);
         YYSentinel *sentinel = _sentinel;
         int32_t value = sentinel.value;
+        
+        // 线程安全的哨兵机制，多线程任务ID匹配机制
+        
         BOOL (^isCancelled)() = ^BOOL() {
             return value != sentinel.value;
         };
         CGSize size = self.bounds.size;
         BOOL opaque = self.opaque;
         CGFloat scale = self.contentsScale;
+        
         CGColorRef backgroundColor = (opaque && self.backgroundColor) ? CGColorRetain(self.backgroundColor) : NULL;
+        
         if (size.width < 1 || size.height < 1) {
+            /*
+             * 小于1释放content资源
+             */
             CGImageRef image = (__bridge_retained CGImageRef)(self.contents);
             self.contents = nil;
             if (image) {
@@ -188,7 +196,10 @@ static dispatch_queue_t YYAsyncLayerGetReleaseQueue() {
             });
         });
     } else {
-        [_sentinel increase];
+        
+        
+        [_sentinel increase]; // 加一等于 _cancelAsyncDisplay；取消异步渲染影响
+        
         if (task.willDisplay) task.willDisplay(self);
         UIGraphicsBeginImageContextWithOptions(self.bounds.size, self.opaque, self.contentsScale);
         CGContextRef context = UIGraphicsGetCurrentContext();

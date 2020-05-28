@@ -21,6 +21,7 @@
 }
 
 - (int32_t)increase {
+    //原子递增
     return OSAtomicIncrement32(&_value);
 }
 

@@ -55,8 +55,14 @@ static YYDispatchContext *YYDispatchContextCreate(const char *name,
         return NULL;
     }
     if ([UIDevice currentDevice].systemVersion.floatValue >= 8.0) {
+        /*
+         * dispatch_queue_create创建队列的优先级跟global dispatch queue的默认优先级一样
+         dispatch_queue_attr_make_with_qos_class 或者 dispatch_set_target_queue 可以设置优先级
+
+         */
         dispatch_qos_class_t qosClass = NSQualityOfServiceToQOSClass(qos);
         for (NSUInteger i = 0; i < queueCount; i++) {
+            
             dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, qosClass, 0);
             dispatch_queue_t queue = dispatch_queue_create(name, attr);
             context->queues[i] = (__bridge_retained void *)(queue);
@@ -64,7 +70,11 @@ static YYDispatchContext *YYDispatchContextCreate(const char *name,
     } else {
         long identifier = NSQualityOfServiceToDispatchPriority(qos);
         for (NSUInteger i = 0; i < queueCount; i++) {
+            
             dispatch_queue_t queue = dispatch_queue_create(name, DISPATCH_QUEUE_SERIAL);
+            /*
+             *  queue现在的优先级跟dispatch_get_global_queue(identifier, 0)一样
+             */
             dispatch_set_target_queue(queue, dispatch_get_global_queue(identifier, 0));
             context->queues[i] = (__bridge_retained void *)(queue);
         }
@@ -98,6 +108,10 @@ static dispatch_queue_t YYDispatchContextGetQueue(YYDispatchContext *context) {
     return (__bridge dispatch_queue_t)(queue);
 }
 
+/*
+ * 为不同优先级创建和 CPU 数量相同的 serial queue，每次从 pool 中获取 queue 时，会轮询返回其中一个 queue
+ * context 更具不同优先级返回context
+ */
 
 static YYDispatchContext *YYDispatchContextGetForQOS(NSQualityOfService qos) {
     static YYDispatchContext *context[5] = {0};

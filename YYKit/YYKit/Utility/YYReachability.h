@@ -28,7 +28,10 @@ typedef NS_ENUM(NSUInteger, YYReachabilityWWANStatus) {
     YYReachabilityWWANStatus4G = 4, ///< Reachable via 4G (eHRPD/LTE)       100Mbps
 };
 
-
+/*
+ * 相比较Apple源码，作者使用串行队列后台执行监控；
+ * 两者都是异步监控
+ */
 /**
  `YYReachability` can used to monitor the network status of an iOS device.
  */

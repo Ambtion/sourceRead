@@ -959,6 +959,9 @@ fail:
 
 - (id)copyWithZone:(NSZone *)zone {
     return self; // readonly object
+    /*
+     * 全部是readonly属性
+     */
 }
 
 

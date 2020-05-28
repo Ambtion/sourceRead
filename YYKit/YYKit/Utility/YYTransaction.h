@@ -13,6 +13,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/*
+ * 1： 利用runloop监控kCFRunLoopBeforeWaiting | kCFRunLoopExit 执行
+ * 2： 优先级设置保证小于CATransaction(2000000)，保证在ui绘制后执行
+ */
 /**
  YYTransaction let you perform a selector once before current runloop sleep.
  */

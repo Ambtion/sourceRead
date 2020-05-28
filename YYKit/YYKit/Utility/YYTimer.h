@@ -22,6 +22,13 @@ NS_ASSUME_NONNULL_BEGIN
  * It always fire on main thread.
  
  */
+
+/*
+ * 1：利用gcd source 不收runloop影响；
+ * 2：weak Target
+ * 3: dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue()); 主线程回调
+ */
+
 @interface YYTimer : NSObject
 
 + (YYTimer *)timerWithTimeInterval:(NSTimeInterval)interval

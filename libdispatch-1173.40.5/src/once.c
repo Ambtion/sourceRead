@@ -51,9 +51,17 @@ DISPATCH_NOINLINE
 void
 dispatch_once_f(dispatch_once_t *val, void *ctxt, dispatch_function_t func)
 {
+	// dispatch_once_t 指针转换为结构体
+	/*
+	 * union {
+		 dispatch_gate_s dgo_gate;
+		 uintptr_t dgo_once;
+	 };
+	 */
 	dispatch_once_gate_t l = (dispatch_once_gate_t)val;
 
 #if !DISPATCH_ONCE_INLINE_FASTPATH || DISPATCH_ONCE_USE_QUIESCENT_COUNTER
+	// v = DLOCK_ONCE_DONE 直接返回，标识已经完成
 	uintptr_t v = os_atomic_load(&l->dgo_once, acquire);
 	if (likely(v == DLOCK_ONCE_DONE)) {
 		return;
@@ -64,6 +72,7 @@ dispatch_once_f(dispatch_once_t *val, void *ctxt, dispatch_function_t func)
 	}
 #endif
 #endif
+	// 比较赋值
 	if (_dispatch_once_gate_tryenter(l)) {
 		return _dispatch_once_callout(l, ctxt, func);
 	}

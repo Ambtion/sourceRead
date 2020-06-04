@@ -665,7 +665,7 @@ typedef long dispatch_queue_priority_t;
  *
  * The global concurrent queues may still be identified by their priority,
  * which map to the following QOS classes:
- *  - DISPATCH_QUEUE_PRIORITY_HIGH:         QOS_CLASS_USER_INITIATED
+ *  - DISPATCH_QUEUE_PRIORITY_HIGH:         QOS_CLASS_USER_INITIATED initated
  *  - DISPATCH_QUEUE_PRIORITY_DEFAULT:      QOS_CLASS_DEFAULT
  *  - DISPATCH_QUEUE_PRIORITY_LOW:          QOS_CLASS_UTILITY
  *  - DISPATCH_QUEUE_PRIORITY_BACKGROUND:   QOS_CLASS_BACKGROUND

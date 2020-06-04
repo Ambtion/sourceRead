@@ -675,6 +675,7 @@ DISPATCH_ALWAYS_INLINE
 static inline bool
 _dispatch_once_gate_tryenter(dispatch_once_gate_t l)
 {
+	// atomic_cmpxchg()函数实现了一个比较+交换的原子操作
 	return os_atomic_cmpxchg(&l->dgo_once, DLOCK_ONCE_UNLOCKED,
 			(uintptr_t)_dispatch_lock_value_for_self(), relaxed);
 }

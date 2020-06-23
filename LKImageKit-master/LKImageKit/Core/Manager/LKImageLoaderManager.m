@@ -308,11 +308,17 @@
                     return;
                 }
                 strongRequestV2.isStarted = YES;
+                
                 [strongRequestV2.loader dataWithRequest:strongRequestV2
                                           callback:^(LKImageRequest *requestLV2, NSData *data, float progress, NSError *error) {
                                               [self loadDataRequestFinished:strongRequestV2 data:data progress:progress error:error];
                                           }];
             });
+            
+            /*
+             * 异步请求,信号持有operation
+             */
+            
             if (!strongRequestV2.synchronized)
             {
                 dispatch_semaphore_wait(strongRequestV2.loader.semaphore, DISPATCH_TIME_FOREVER);

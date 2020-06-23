@@ -44,7 +44,9 @@ struct ImagePointer
 
 + (instancetype)defaultCache
 {
+    
     NSAssert([NSThread isMainThread], @"LKImageMemoryCache is not running on Main Thread!");
+    
     static LKImageMemoryCache *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{

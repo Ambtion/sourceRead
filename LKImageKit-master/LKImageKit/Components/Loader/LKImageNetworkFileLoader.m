@@ -114,11 +114,11 @@
     loaderTask.callback                      = callback;
     loaderTask.data                          = [NSMutableData data];
     loaderTask.request                       = request;
+    
     [self.lock lock];
     [self.reqTable setObject:loaderTask forKey:request.keyForLoader];
     [self.taskTable setObject:loaderTask forKey:@(task.taskIdentifier)];
     [self.lock unlock];
-    
     [task resume];
 }
 

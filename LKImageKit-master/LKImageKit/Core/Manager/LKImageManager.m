@@ -155,9 +155,12 @@
 {
     requestLV0.isStarted = YES;
     atomic_fetch_add(&LKImageRunningRequestCount, 1);
+    
     NSOperation *op = [NSBlockOperation blockOperationWithBlock:^{
         if (requestLV0.isCanceled||requestLV0.isFinished)
         {
+            
+            // 原子操作
             atomic_fetch_sub(&LKImageRunningRequestCount, 1);
             atomic_fetch_add(&LKImageCancelRequestCount, 1);
             requestLV0.isFinished = YES;
@@ -167,6 +170,7 @@
             requestLV0.imageManagerCancelOperation = nil;
             return;
         }
+        // 内联函数
         LKImageLogVerbose([NSString stringWithFormat:@"LKImageManagerProcessRequest:%@", requestLV0]);
         LKImageRequest *requestLV1 = nil;
         requestLV0.error           = nil;
@@ -175,6 +179,7 @@
             requestLV1 = [self.requestDic objectForKey:requestLV0.identifier];
         }
 
+        //相同请求合并；已有发出，合并等待发出请求返回
         if (requestLV1)
         {
             LKImageLogVerbose([NSString stringWithFormat:@"ManagerRequestCombine:%@", requestLV1]);

@@ -7,7 +7,9 @@
 //
 //  Created by lingtonke
 
-
+/*
+ * https://www.jianshu.com/p/935c5371a3ff
+ */
 #import "LKImageConfiguration.h"
 #import "LKImageError.h"
 #import "LKImageLogManager.h"

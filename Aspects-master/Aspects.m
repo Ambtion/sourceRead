@@ -19,6 +19,9 @@ typedef NS_OPTIONS(int, AspectBlockFlags) {
     AspectBlockFlagsHasCopyDisposeHelpers = (1 << 25),
     AspectBlockFlagsHasSignature          = (1 << 30)
 };
+/*
+ * block描述 http://clang.llvm.org/docs/Block-ABI-Apple.html
+ */
 typedef struct _AspectBlock {
     __unused Class isa;
     AspectBlockFlags flags;

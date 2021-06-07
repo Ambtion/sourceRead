@@ -627,12 +627,12 @@
 			children = (
 				830F2A970D738DC200392440 /* hashtable.h */,
 				838485B70D6D687300CEA253 /* hashtable2.h */,
-				838485CD0D6D68A200CEA253 /* objc-class.h */,
 				838485D70D6D68A200CEA253 /* objc-load.h */,
 				838485E30D6D68A200CEA253 /* objc-runtime.h */,
 				838486240D6D68F000CEA253 /* List.h */,
 				838485ED0D6D68A200CEA253 /* Object.h */,
 				838486180D6D68A800CEA253 /* Protocol.h */,
+				838485CD0D6D68A200CEA253 /* objc-class.h */,
 			);
 			name = "Obsolete Headers";
 			sourceTree = "<group>";
@@ -808,7 +808,6 @@
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				BuildIndependentTargetsInParallel = NO;
 				LastUpgradeCheck = 0900;
 				TargetAttributes = {
 					305B27521C7D9E96005AC125 = {
